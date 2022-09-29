@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { Product } from 'src/app/common/product';
 import { ProductService } from 'src/app/services/product.service';
 import { ActivatedRoute } from '@angular/router'
+import { CartItem } from 'src/app/common/cart-item';
+import { CartService } from 'src/app/services/cart.service';
 
 @Component({
   selector: 'app-product-list',
@@ -13,17 +15,25 @@ export class ProductListComponent implements OnInit {
   products: Product[] = [];
   currentCategotyId: number = 1;
   currentCategoryName: string = "Book";
+  previusCategoryId: number = 1;
   searchMode: boolean = false;
 
-  constructor(private productService: ProductService, private route: ActivatedRoute) { }
+  thePageNumber: number = 1;
+  thePageSize: number = 5;
+  theTotalElements: number = 0;
+
+
+  previousKeyword: string = "";
+
+  constructor(private productService: ProductService, private route: ActivatedRoute, private cartService: CartService) { }
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(() => {
-      this.listProduct();
+      this.listProducts();
     });
   }
 
-  listProduct() {
+  listProducts() {
     this.searchMode = this.route.snapshot.paramMap.has('keyword');
 
     if (this.searchMode) {
@@ -38,11 +48,19 @@ export class ProductListComponent implements OnInit {
 
     const theKeyWord: string = this.route.snapshot.paramMap.get('keyword')!;
 
-    this.productService.searchProducts(theKeyWord).subscribe(
-      data => {
-        this.products = data;
-      }
-    )
+    if (this.previousKeyword != theKeyWord) {
+      this.thePageNumber = 1;
+    }
+
+    this.previousKeyword = theKeyWord;
+
+    console.log(`keyword=${theKeyWord}, thePageNumber=${this.thePageNumber}`);
+
+    this.productService.searchProductsPaginate(
+      this.thePageNumber - 1,
+      this.thePageSize,
+      theKeyWord)
+      .subscribe(this.processResult());
   }
 
   handleListProducts() {
@@ -57,11 +75,43 @@ export class ProductListComponent implements OnInit {
       this.currentCategoryName = "Books";
     }
 
-    this.productService.getproductList(this.currentCategotyId).subscribe(
-      data => {
-        this.products = data;
-      }
-    )
+    if (this.previusCategoryId != this.currentCategotyId) {
+      this.thePageNumber = 1;
+    }
+
+    this.previusCategoryId = this.currentCategotyId;
+
+    console.log(`currentCategoryId=${this.currentCategotyId}, thePageNumber=${this.thePageNumber}`);
+
+    this.productService.getProductsListPaginate(
+      this.thePageNumber - 1,
+      this.thePageSize,
+      this.currentCategotyId)
+      .subscribe(this.processResult());
+  }
+
+  updatePageSize(pageSize: string) {
+    this.thePageSize = +pageSize;
+    this.thePageNumber = 1;
+    this.listProducts();
+  }
+
+  processResult() {
+    return (data: any) => {
+      this.products = data._embedded.products;
+      this.thePageNumber = data.page.number + 1;
+      this.thePageSize = data.page.size;
+      this.theTotalElements = data.page.totalElements;
+    };
+  }
+
+  addToCart(tehProduct: Product) {
+
+    console.log(`Adding to cart: ${tehProduct.name}, ${tehProduct.unitPrice}`);
+
+    const theCartItem = new CartItem(tehProduct);
+
+    this.cartService.addToCart(theCartItem);
   }
 
 }
